@@ -21,11 +21,12 @@ import asyncio
 async def download_file_with_retry(doc_or_photo, file_path, retries=3, delay=1.0):
     """
     Downloads a Telegram file with a retry mechanism to handle concurrency or rate limits.
+    Increases read and write timeouts to prevent connection timeouts during concurrent uploads.
     """
     for attempt in range(retries):
         try:
-            tg_file = await doc_or_photo.get_file()
-            await tg_file.download_to_drive(file_path)
+            tg_file = await doc_or_photo.get_file(read_timeout=30.0)
+            await tg_file.download_to_drive(file_path, write_timeout=30.0)
             return True
         except Exception as e:
             if attempt == retries - 1:
@@ -63,7 +64,11 @@ async def handle_resume_upload(update: Update, context: ContextTypes.DEFAULT_TYP
             await context.bot.send_chat_action(chat_id=message.chat_id, action="upload_document")
             
             file_type = ext.replace(".", "")
-            file_path = os.path.join(UPLOAD_DIR, f"{message.chat_id}_{doc.file_id}{ext}")
+            import re
+            safe_name = re.sub(r'[\\/*?:"<>|]', "", file_name)
+            if not safe_name:
+                safe_name = f"resume_{doc.file_id}{ext}"
+            file_path = os.path.join(UPLOAD_DIR, f"{message.chat_id}_{safe_name}")
             await download_file_with_retry(doc, file_path)
             
         # Handle Photos (images sent directly)

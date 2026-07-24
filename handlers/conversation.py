@@ -206,27 +206,47 @@ class TFIDFSearch:
 # Initialize the Search Engine
 search_engine = TFIDFSearch(FAQ_DATA)
 
-def get_faq_response(user_query):
+def get_faq_response(user_query, user_id=None):
     """
     Retrieves the response to the user query.
-    If GROK_API_KEY is configured, uses native Groq API.
+    If GROK_API_KEY is configured, uses native Groq API with user's resume/JD context.
     Otherwise, falls back to local TF-IDF matching (Case F/G).
     """
     if groq_client:
         try:
-            logger.info(f"Generating chatbot response using native Groq API for: {user_query}")
+            # Dynamically fetch user's active resume and Job Description for context
+            context_info = ""
+            if user_id:
+                try:
+                    from database.db import get_latest_resume, get_latest_jd
+                    resume = get_latest_resume(user_id)
+                    jd = get_latest_jd(user_id)
+                    
+                    if resume:
+                        context_info += f"\n\n--- CURRENT CANDIDATE RESUME TEXT ---\n{resume['extracted_text']}\n"
+                    if jd:
+                        context_info += f"\n\n--- JOB DESCRIPTION TEXT ---\n{jd['jd_text']}\n"
+                except Exception as db_err:
+                    logger.error(f"Error fetching candidate context from DB: {db_err}")
+            
+            system_prompt = (
+                "You are an expert HR, recruiter, and career coach assistant for an ATS Resume Analyzer Bot.\n"
+                "You have access to the candidate's uploaded resume and the Job Description below (if provided).\n"
+                "Answer the user's questions about their resume, candidate details (such as names, experience, skills, "
+                "projects, or recommendations), interview preparation, and job descriptions using this context.\n"
+                "If the user asks questions like 'What is the name of this resume owner?' or 'Who is the candidate?', "
+                "read the resume text, locate the candidate's name, and provide it clearly.\n"
+                "Keep your answers professional, concise, clear, and action-oriented. Format them in clean Telegram Markdown."
+            )
+            
+            if context_info:
+                system_prompt += context_info
+                
+            logger.info(f"Generating chatbot response using native Groq API for: {user_query} (Context provided: {bool(context_info)})")
             chat_completion = groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an expert HR, recruiter, and career coach assistant for an ATS Resume Analyzer Bot.\n"
-                            "Your task is to answer user queries related to resume writing, ATS optimization, cover letters, "
-                            "job interview preparation (including behavioral interview tips, STAR method), and general career advice.\n"
-                            "Keep your answers professional, concise, clear, and action-oriented. Format them in clean Telegram Markdown."
-                        )
-                    },
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_query}
                 ]
             )
@@ -267,7 +287,8 @@ async def handle_faq_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Includes a fallback wrapper to prevent Telegram Markdown formatting crashes.
     """
     user_message = update.message.text
-    response = get_faq_response(user_message)
+    user_id = update.effective_user.id
+    response = get_faq_response(user_message, user_id=user_id)
     try:
         await update.message.reply_text(response, parse_mode="Markdown")
     except Exception as e:

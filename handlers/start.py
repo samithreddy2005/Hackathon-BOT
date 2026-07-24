@@ -31,8 +31,11 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Save user to DB
     add_user(user.id, username)
     
+    # Clean name to prevent Markdown parsing crash (if username contains underscores/asterisks)
+    clean_name = username.replace("_", " ").replace("*", "")
+    
     welcome_text = (
-        f"🤖 **Welcome {username} to the ATS Resume Analyzer Bot!**\n\n"
+        f"🤖 **Welcome {clean_name} to the ATS Resume Analyzer Bot!**\n\n"
         "I am designed to evaluate your resume against Job Descriptions (JD) "
         "entirely locally, helping you optimize it for Applicant Tracking Systems.\n\n"
         "📥 **How to get started**:\n"
