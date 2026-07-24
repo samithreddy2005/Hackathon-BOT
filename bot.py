@@ -5,7 +5,7 @@ Wires up all command handlers, callbacks, and message listeners.
 
 import sys
 import logging
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -71,6 +71,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             parse_mode="Markdown"
         )
 
+async def post_init(application: Application) -> None:
+    """
+    Registers commands to the Telegram menu button on startup.
+    """
+    commands = [
+        BotCommand("start", "Start the bot and open the main menu"),
+        BotCommand("help", "View detailed instructions and help"),
+        BotCommand("compare", "Compare the latest two resume uploads"),
+        BotCommand("history", "View your scoring history")
+    ]
+    await application.bot.set_my_commands(commands)
+
 def main() -> None:
     """
     Starts the telegram bot application.
@@ -85,7 +97,7 @@ def main() -> None:
         sys.exit(1)
         
     # 2. Build the application
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
     # 3. Register handlers
     # Command handlers
