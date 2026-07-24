@@ -38,10 +38,40 @@ logger = logging.getLogger(__name__)
 from database.db import get_latest_resume
 from handlers.conversation import search_engine, get_faq_response
 
+def is_probably_job_description(text: str) -> bool:
+    """
+    Heuristic classifier to determine if input text is a Job Description or a chatbot query.
+    """
+    clean_text = text.strip()
+    if not clean_text:
+        return False
+        
+    # If it ends with a question mark, it's definitely a user query
+    if clean_text.endswith("?"):
+        return False
+        
+    # List of common question words at the start of a query
+    question_keywords = {
+        "how", "what", "why", "who", "where", "when", "can", "could", "should", "would",
+        "is", "are", "do", "does", "did", "explain", "describe", "give", "suggest", "improve",
+        "tell", "show", "help", "list"
+    }
+    words = clean_text.split()
+    first_word = words[0].lower().strip(".,!?\"'") if words else ""
+    
+    if first_word in question_keywords:
+        return False
+        
+    # Job descriptions are usually longer blocks of text (> 30 words)
+    if len(words) > 30:
+        return True
+        
+    return False
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Routes text messages to either the Job Description scorer or the HR FAQ assistant,
-    depending on the user's conversational state and database records.
+    depending on the user's state, history, and message structure.
     """
     user_id = update.effective_user.id
     user_message = update.message.text
@@ -50,12 +80,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     resume = get_latest_resume(user_id)
     
     if not resume:
-        # User has no resume. Check if they are asking an FAQ question
-        best_question, score = search_engine.query(user_message)
-        if best_question and score > 0.45:
-            response = get_faq_response(user_message)
-            await update.message.reply_text(response, parse_mode="Markdown")
-        else:
+        # User has no resume. Check if they pasted a JD or asked a question
+        if is_probably_job_description(user_message):
             # Instruct the user to upload a resume first
             instruction_text = (
                 "⚠️ **Please upload your resume first!**\n\n"
@@ -66,20 +92,24 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "3️⃣ I will calculate your compatibility score and show improvements!"
             )
             await update.message.reply_text(instruction_text, parse_mode="Markdown")
+        else:
+            # Answer general questions using chatbot (Groq API/TF-IDF)
+            await handle_faq_query(update, context)
         return
 
-    # If resume exists, route based on state
+    # If resume exists, route based on state and heuristics
     state = context.user_data.get("state")
     if state == "WAITING_FOR_JD":
+        # Actively waiting for Job Description
         await handle_job_description(update, context)
     else:
-        # If user has a resume, but sent a long text that isn't a clear FAQ,
-        # we can assume they are pasting a new Job Description to evaluate.
-        best_question, score = search_engine.query(user_message)
-        if (best_question and score > 0.45) or len(user_message.split()) < 15:
-            await handle_faq_query(update, context)
-        else:
+        # State is None/inactive
+        if is_probably_job_description(user_message):
+            # User wants to run another evaluation with a new JD
             await handle_job_description(update, context)
+        else:
+            # User is chatting / asking a follow-up question
+            await handle_faq_query(update, context)
 
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """

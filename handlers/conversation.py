@@ -16,7 +16,7 @@ from groq import Groq
 logger = logging.getLogger(__name__)
 
 # Configure Groq client if key is present
-groq_key = os.getenv("GROK_API_KEY", "")
+groq_key = os.getenv("REDACTED_GROQ_KEY", "")
 
 # Fallback: if not found, look for any environment variable containing 'gsk_'
 if not groq_key:
@@ -263,8 +263,16 @@ def get_faq_response(user_query):
 
 async def handle_faq_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Responds to general messages using the local TF-IDF search engine.
+    Responds to general messages using the Groq API or local TF-IDF search engine.
+    Includes a fallback wrapper to prevent Telegram Markdown formatting crashes.
     """
     user_message = update.message.text
     response = get_faq_response(user_message)
-    await update.message.reply_text(response, parse_mode="Markdown")
+    try:
+        await update.message.reply_text(response, parse_mode="Markdown")
+    except Exception as e:
+        logger.warning(f"Failed to send FAQ query with Markdown formatting: {e}. Retrying as plain text...")
+        try:
+            await update.message.reply_text(response)
+        except Exception as ex:
+            logger.error(f"Failed to send FAQ query as plain text: {ex}")
