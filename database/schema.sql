@@ -37,3 +37,7 @@ CREATE TABLE IF NOT EXISTS scores (
     FOREIGN KEY(resume_id) REFERENCES resumes(resume_id),
     FOREIGN KEY(jd_id) REFERENCES job_descriptions(jd_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes(user_id);
+CREATE INDEX IF NOT EXISTS idx_scores_resume ON scores(resume_id);
+
