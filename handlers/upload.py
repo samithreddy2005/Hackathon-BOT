@@ -16,6 +16,24 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+import asyncio
+
+async def download_file_with_retry(doc_or_photo, file_path, retries=3, delay=1.0):
+    """
+    Downloads a Telegram file with a retry mechanism to handle concurrency or rate limits.
+    """
+    for attempt in range(retries):
+        try:
+            tg_file = await doc_or_photo.get_file()
+            await tg_file.download_to_drive(file_path)
+            return True
+        except Exception as e:
+            if attempt == retries - 1:
+                raise e
+            logger.warning(f"Download attempt {attempt + 1} failed for {file_path}. Retrying in {delay}s... Error: {e}")
+            await asyncio.sleep(delay)
+    return False
+
 async def handle_resume_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Downloads and parses the uploaded resume document.
@@ -42,34 +60,30 @@ async def handle_resume_upload(update: Update, context: ContextTypes.DEFAULT_TYP
                 return
                 
             status_msg = await message.reply_text("📥 Downloading your resume file...")
-            # Trigger document upload action
             await context.bot.send_chat_action(chat_id=message.chat_id, action="upload_document")
             
             file_type = ext.replace(".", "")
-            tg_file = await doc.get_file()
             file_path = os.path.join(UPLOAD_DIR, f"{message.chat_id}_{doc.file_id}{ext}")
-            await tg_file.download_to_drive(file_path)
+            await download_file_with_retry(doc, file_path)
             
         # Handle Photos (images sent directly)
         elif message.photo:
             status_msg = await message.reply_text("📥 Downloading resume image...")
-            # Trigger document upload action
             await context.bot.send_chat_action(chat_id=message.chat_id, action="upload_document")
             
             photo = message.photo[-1]  # Get largest size
             file_type = "image"
             ext = ".jpg"
             file_name = f"photo_{photo.file_id}.jpg"
-            tg_file = await photo.get_file()
             file_path = os.path.join(UPLOAD_DIR, f"{message.chat_id}_{photo.file_id}{ext}")
-            await tg_file.download_to_drive(file_path)
+            await download_file_with_retry(photo, file_path)
             
         else:
             await message.reply_text("❌ No file detected. Please upload your resume.")
             return
             
     except Exception as e:
-        logger.error(f"Error downloading file: {e}")
+        logger.exception("Error downloading file")
         if status_msg:
             await status_msg.edit_text("❌ Failed to download file. Please try again.")
         else:
@@ -90,31 +104,76 @@ async def handle_resume_upload(update: Update, context: ContextTypes.DEFAULT_TYP
     elif file_type in ["png", "jpg", "jpeg", "image"]:
         extracted_text = extract_text_from_image(file_path)
         
-    if not extracted_text or not extracted_text.strip():
+    # 2. Verify Case C: File text extraction failed or is too short
+    word_count = len(extracted_text.split())
+    if word_count < 50:
         await status_msg.edit_text(
-            "⚠️ Text extraction returned empty content.\n"
-            "If this is a scanned PDF or image, ensure OCR is installed properly. "
-            "Otherwise, please check your document content."
+            "❌ **Resume text could not be read or is too short (Case C)**\n\n"
+            f"The uploaded document contains only {word_count} words, which is insufficient for an ATS evaluation.\n"
+            "Please ensure you upload a text-based PDF, DOCX file, or a high-quality resume image, and try again.",
+            parse_mode="Markdown"
         )
-        # Cleanup file if parsing failed
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
         return
         
+    # Verify Case D: File does not look like a resume (missing essential sections)
+    from parser.extractor import detect_sections
+    sections = detect_sections(extracted_text)
+    has_headers = sections["experience"] or sections["education"] or sections["skills"]
+    if not has_headers:
+        await status_msg.edit_text(
+            "❌ **Document does not look like a resume (Case D)**\n\n"
+            "I could not detect standard resume sections (like Work Experience, Education, or Skills) in this document.\n"
+            "If you intended to send a Job Description, please upload your resume file first.",
+            parse_mode="Markdown"
+        )
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+        return
+        
+    # Verify Case E: Check if it's a near-duplicate / revision of a previous resume
+    from database.db import get_latest_resume
+    from rapidfuzz import fuzz
+    
+    user_id = update.effective_user.id
+    prev_resume = get_latest_resume(user_id)
+    is_revision = False
+    
+    if prev_resume:
+        similarity = fuzz.ratio(extracted_text.lower(), prev_resume["extracted_text"].lower())
+        if similarity > 60.0:
+            is_revision = True
+            
     # 3. Save to database
-    resume_id = save_resume(update.effective_user.id, file_path, file_type, extracted_text)
+    resume_id = save_resume(user_id, file_path, file_type, extracted_text)
     
     if resume_id:
-        # Update user session state
         context.user_data["state"] = "WAITING_FOR_JD"
         context.user_data["last_resume_id"] = resume_id
         
-        success_msg = (
-            f"✅ **Resume parsed successfully!**\n"
-            f"📄 File: `{file_name}`\n"
-            f"📏 Word Count: `{len(extracted_text.split())}` words\n\n"
-            f"👉 **Next Step**: Please paste/send the **Job Description (JD)** text to start evaluation."
-        )
+        # Append resume_id to tracking list
+        if "uploaded_resume_ids" not in context.user_data:
+            context.user_data["uploaded_resume_ids"] = []
+        context.user_data["uploaded_resume_ids"].append(resume_id)
+        
+        # Clean file name from underscores for Markdown safety
+        clean_file_name = file_name.replace("_", " ")
+        
+        if is_revision:
+            success_msg = (
+                f"🔄 **Revision detected (Case E)!**\n"
+                f"📄 File: `{clean_file_name}`\n"
+                f"📏 Word Count: `{word_count}` words\n\n"
+                f"Your updated resume was successfully uploaded. Please paste or send the **Job Description (JD)** text to compare scores."
+            )
+        else:
+            success_msg = (
+                f"✅ **Resume parsed successfully!**\n"
+                f"📄 File: `{clean_file_name}`\n"
+                f"📏 Word Count: `{word_count}` words\n\n"
+                f"👉 **Next Step**: Please paste/send the **Job Description (JD)** text to start evaluation."
+            )
         await status_msg.edit_text(success_msg, parse_mode="Markdown")
     else:
         await status_msg.edit_text("❌ Database error occurred while saving your resume. Please try again.")

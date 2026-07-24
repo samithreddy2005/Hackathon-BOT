@@ -2,14 +2,39 @@
 Conversational FAQ Assistant for resume tips and interview preparation.
 Implements a custom pure Python TF-IDF + Cosine Similarity search engine for offline query matching.
 """
+import os
 import math
 import logging
 from collections import Counter
 from telegram import Update
 from telegram.ext import ContextTypes
 from parser.cleaner import tokenize_and_normalize
+# pyrefly: ignore [missing-import]
+from groq import Groq
 
+# Initialize logger first so it's available for client configuration logs
 logger = logging.getLogger(__name__)
+
+# Configure Groq client if key is present
+groq_key = os.getenv("GROK_API_KEY", "")
+
+# Fallback: if not found, look for any environment variable containing 'gsk_'
+if not groq_key:
+    for env_name, env_val in os.environ.items():
+        if env_val.startswith("gsk_"):
+            groq_key = env_val
+            break
+
+groq_client = None
+if groq_key:
+    try:
+        groq_client = Groq(api_key=groq_key)
+        logger.info("Groq native API client configured successfully.")
+    except Exception as e:
+        logger.error(f"Error configuring Groq client: {e}")
+        groq_client = None
+else:
+    logger.info("Groq API key missing. Running in local fallback mode.")
 
 # Expanded offline HR and recruitment FAQ dataset
 FAQ_DATA = {
@@ -183,24 +208,57 @@ search_engine = TFIDFSearch(FAQ_DATA)
 
 def get_faq_response(user_query):
     """
-    Retrieves the response to the user query using TF-IDF matching.
+    Retrieves the response to the user query.
+    If GROK_API_KEY is configured, uses native Groq API.
+    Otherwise, falls back to local TF-IDF matching (Case F/G).
     """
+    if groq_client:
+        try:
+            logger.info(f"Generating chatbot response using native Groq API for: {user_query}")
+            chat_completion = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert HR, recruiter, and career coach assistant for an ATS Resume Analyzer Bot.\n"
+                            "Your task is to answer user queries related to resume writing, ATS optimization, cover letters, "
+                            "job interview preparation (including behavioral interview tips, STAR method), and general career advice.\n"
+                            "Keep your answers professional, concise, clear, and action-oriented. Format them in clean Telegram Markdown."
+                        )
+                    },
+                    {"role": "user", "content": user_query}
+                ]
+            )
+            return chat_completion.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Groq API call failed: {e}. Falling back to TF-IDF.")
+            
     best_question, score = search_engine.query(user_query)
     
-    # We require a threshold score to prevent matching irrelevant queries
-    # Since cosine similarity can be low for short texts, 0.25 is a good baseline
+    # Case F: High-confidence FAQ match
     if best_question and score > 0.25:
         logger.info(f"TF-IDF matched query '{user_query}' to '{best_question}' (Score: {score:.3f})")
         return f"❓ **Question matched**: _{best_question}_\n\n{FAQ_DATA[best_question]}"
         
-    # Standard fallback guide listing topics
+    # Case G: Ambiguous or short queries
+    words = user_query.strip().split()
+    if len(words) < 4:
+        return (
+            "❓ **Clarification needed (Case G)**:\n\n"
+            "I'm not sure what you need. Could you please clarify?\n"
+            "• To start a resume screening, please **upload your resume file** (PDF, DOCX, or Image).\n"
+            "• Or ask a specific question about resume writing, interview prep, or salary expectations."
+        )
+        
+    # Case G: Ambiguous long query
     topics_list = "\n".join([f"• {q}" for q in list(FAQ_DATA.keys())[:5]])
     return (
-        "🤖 **HR Assistant & Resume Helper**\n\n"
-        "I couldn't match your question exactly. I can help answer common questions about resume formatting, ATS optimization, and interview preparation. \n\n"
-        "👉 **Try asking about these topics**:\n"
+        "❓ **Clarification needed (Case G)**:\n\n"
+        "I couldn't match your query to my local HR knowledge base. Could you please clarify your question?\n\n"
+        "👉 **Here are some topics you can ask me about**:\n"
         f"{topics_list}\n"
-        "• _Or ask about behavioral interview tips, explaining gaps, salary queries, etc._"
+        "• _Or ask about behavioral interview tips, career gaps, cover letters, etc._"
     )
 
 async def handle_faq_query(update: Update, context: ContextTypes.DEFAULT_TYPE):

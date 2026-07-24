@@ -5,8 +5,10 @@ import json
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from database.db import get_latest_resume, save_jd, save_score, get_latest_jd, get_user_scores_history
+import os
+from database.db import get_latest_resume, save_jd, save_score, get_latest_jd, get_user_scores_history, get_resume_by_id, get_previous_resume
 from ats.scorer import evaluate_resume
+from comparison.version_tracker import compare_versions
 
 logger = logging.getLogger(__name__)
 
@@ -67,22 +69,37 @@ def format_evaluation_report(eval_results):
 
 async def handle_job_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Processes the pasted Job Description text, runs the ATS scorer, and shows the report.
+    Processes the pasted Job Description text, runs the ATS scorer for ALL uploaded resumes
+    in the current batch, saves results, and appends automatic iteration comparisons where applicable.
     """
     message = update.message
     jd_text = message.text
     user_id = update.effective_user.id
     
-    # 1. Retrieve latest resume
-    resume = get_latest_resume(user_id)
-    if not resume:
+    # 1. Retrieve all uploaded resumes for this batch/session
+    resume_ids = context.user_data.get("uploaded_resume_ids", [])
+    resume_records = []
+    
+    if not resume_ids:
+        # Fallback to the single latest resume in history
+        resume = get_latest_resume(user_id)
+        if resume:
+            resume_records.append(resume)
+    else:
+        # Load all resumes in the current batch
+        for rid in resume_ids:
+            res_rec = get_resume_by_id(rid)
+            if res_rec:
+                resume_records.append(res_rec)
+                
+    if not resume_records:
         await message.reply_text(
-            "❌ No resume found in your session. Please upload a resume file (.pdf, .docx, image) first!"
+            "❌ No resumes found in your session. Please upload at least one resume file first!"
         )
         context.user_data["state"] = None
         return
         
-    status_msg = await message.reply_text("⚖️ Analyzing compatibility against Job Description...")
+    status_msg = await message.reply_text(f"⚖️ Analyzing {len(resume_records)} resume(s) against Job Description...")
     await context.bot.send_chat_action(chat_id=message.chat_id, action="typing")
     
     # 2. Save JD
@@ -91,38 +108,77 @@ async def handle_job_description(update: Update, context: ContextTypes.DEFAULT_T
         await status_msg.edit_text("❌ Database error occurred while saving job description.")
         return
         
-    # 3. Evaluate score
-    eval_results = evaluate_resume(resume["extracted_text"], jd_text)
-    
-    # 4. Save score to database
-    # Serialize suggestions dict to JSON string for saving in DB
-    suggestions_json = json.dumps(eval_results["suggestions"])
-    save_score(
-        resume_id=resume["resume_id"],
-        jd_id=jd_id,
-        overall_score=eval_results["overall_score"],
-        keyword_score=eval_results["keyword_score"],
-        structure_score=eval_results["structure_score"],
-        formatting_score=eval_results["formatting_score"],
-        suggestions=suggestions_json
-    )
-    
-    # 5. Format and show report
-    report_text = format_evaluation_report(eval_results)
-    
-    # Add keyboard buttons for follow-ups
-    keyboard = [
-        [
-            InlineKeyboardButton("🔄 Compare with Previous", callback_data="btn_compare"),
-            InlineKeyboardButton("📜 View History", callback_data="btn_history")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Clear WAITING_FOR_JD state
+    # Process each resume in the batch list
+    for idx, resume in enumerate(resume_records):
+        # 3. Evaluate score
+        eval_results = evaluate_resume(resume["extracted_text"], jd_text)
+        
+        # 4. Save score to database
+        suggestions_json = json.dumps(eval_results["suggestions"])
+        save_score(
+            resume_id=resume["resume_id"],
+            jd_id=jd_id,
+            overall_score=eval_results["overall_score"],
+            keyword_score=eval_results["keyword_score"],
+            structure_score=eval_results["structure_score"],
+            formatting_score=eval_results["formatting_score"],
+            suggestions=suggestions_json
+        )
+        
+        # 5. Format report text
+        report_text = format_evaluation_report(eval_results)
+        
+        # Extract and clean filename label for report clarity
+        file_name = os.path.basename(resume["file_path"])
+        if "_" in file_name:
+            file_name = file_name.split("_", 1)[1]
+        file_name = file_name.replace("_", " ")
+            
+        report_header = f"📄 **RESUME: `{file_name}`**\n\n"
+        full_report = report_header + report_text
+        
+        # 6. Automatic Comparison logic (Case E improvement)
+        # Check if there is a previous resume uploaded prior to this one
+        prev_resume = get_previous_resume(user_id, resume["resume_id"])
+        if prev_resume:
+            prev_eval = evaluate_resume(prev_resume["extracted_text"], jd_text)
+            comp = compare_versions(eval_results, prev_eval)
+            if comp:
+                delta = comp["score_delta"]
+                sign = "+" if delta >= 0 else ""
+                direction = "📈 Improvement" if delta >= 0 else "📉 Decline"
+                
+                comp_text = (
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔄 **ITERATION COMPARISON (vs Previous Version)**\n"
+                    f"• Score Change: `{sign}{delta} points` ({direction})\n"
+                    f"  - Previous Score: `{prev_eval['overall_score']}/100`\n"
+                    f"  - New Score: `{eval_results['overall_score']}/100`\n"
+                )
+                
+                added_kws = comp["newly_matched_keywords"]
+                if added_kws:
+                    comp_text += f"✨ *Newly Matched Skills*: {', '.join([f'`{k}`' for k in added_kws])}\n"
+                    
+                resolved = comp["resolved_issues"]
+                if resolved:
+                    comp_text += f"💅 *Resolved Issues*: {', '.join([f'_{r}_' for r in resolved])}\n"
+                    
+                full_report += "\n" + comp_text
+                
+        # Send/edit reports
+        if idx == 0:
+            # First resume report edits status_msg and displays a History callback button
+            keyboard = [[InlineKeyboardButton("📜 View History", callback_data="btn_history")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await status_msg.edit_text(full_report, reply_markup=reply_markup, parse_mode="Markdown")
+        else:
+            # Subsequent reports are sent as separate follow-up messages
+            await message.reply_text(full_report, parse_mode="Markdown")
+            
+    # Reset states and uploaded batch list
     context.user_data["state"] = None
-    
-    await status_msg.edit_text(report_text, reply_markup=reply_markup, parse_mode="Markdown")
+    context.user_data["uploaded_resume_ids"] = []
 
 async def handle_latest_score_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """

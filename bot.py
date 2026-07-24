@@ -35,16 +35,51 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+from database.db import get_latest_resume
+from handlers.conversation import search_engine, get_faq_response
+
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Routes text messages to either the Job Description scorer or the HR FAQ assistant,
-    depending on the user's conversational state.
+    depending on the user's conversational state and database records.
     """
+    user_id = update.effective_user.id
+    user_message = update.message.text
+    
+    # Check if user has uploaded any resume in the system
+    resume = get_latest_resume(user_id)
+    
+    if not resume:
+        # User has no resume. Check if they are asking an FAQ question
+        best_question, score = search_engine.query(user_message)
+        if best_question and score > 0.45:
+            response = get_faq_response(user_message)
+            await update.message.reply_text(response, parse_mode="Markdown")
+        else:
+            # Instruct the user to upload a resume first
+            instruction_text = (
+                "⚠️ **Please upload your resume first!**\n\n"
+                "I cannot evaluate a Job Description without a resume to compare it against.\n\n"
+                "📥 **How to start**:\n"
+                "1️⃣ Send or upload your resume file first (supports **.pdf**, **.docx**, or images).\n"
+                "2️⃣ Once parsed, paste or send the **Job Description** (JD) text.\n"
+                "3️⃣ I will calculate your compatibility score and show improvements!"
+            )
+            await update.message.reply_text(instruction_text, parse_mode="Markdown")
+        return
+
+    # If resume exists, route based on state
     state = context.user_data.get("state")
     if state == "WAITING_FOR_JD":
         await handle_job_description(update, context)
     else:
-        await handle_faq_query(update, context)
+        # If user has a resume, but sent a long text that isn't a clear FAQ,
+        # we can assume they are pasting a new Job Description to evaluate.
+        best_question, score = search_engine.query(user_message)
+        if (best_question and score > 0.45) or len(user_message.split()) < 15:
+            await handle_faq_query(update, context)
+        else:
+            await handle_job_description(update, context)
 
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """

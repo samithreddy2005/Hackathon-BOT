@@ -201,3 +201,35 @@ def get_user_scores_history(user_id):
     except Exception as e:
         logger.error(f"Error retrieving scores history for user {user_id}: {e}")
         return []
+
+def get_resume_by_id(resume_id):
+    """
+    Retrieves a resume record by its unique ID.
+    """
+    try:
+        with get_connection() as conn:
+            row = conn.execute("SELECT * FROM resumes WHERE resume_id = ?", (resume_id,)).fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Error retrieving resume by ID {resume_id}: {e}")
+        return None
+
+def get_previous_resume(user_id, current_resume_id):
+    """
+    Retrieves the resume uploaded just prior to the current_resume_id.
+    """
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM resumes
+                WHERE user_id = ? AND resume_id < ?
+                ORDER BY uploaded_at DESC
+                LIMIT 1
+                """,
+                (user_id, current_resume_id)
+            ).fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Error retrieving previous resume for user {user_id}: {e}")
+        return None
