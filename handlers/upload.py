@@ -139,14 +139,23 @@ async def handle_resume_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         
     # Verify Case E: Check if it's a near-duplicate / revision of a previous resume
     from database.db import get_latest_resume
-    from rapidfuzz import fuzz
+    try:
+        from rapidfuzz import fuzz
+        has_rapidfuzz = True
+    except ImportError:
+        import difflib
+        has_rapidfuzz = False
     
     user_id = update.effective_user.id
     prev_resume = get_latest_resume(user_id)
     is_revision = False
     
     if prev_resume:
-        similarity = fuzz.ratio(extracted_text.lower(), prev_resume["extracted_text"].lower())
+        if has_rapidfuzz:
+            similarity = fuzz.ratio(extracted_text.lower(), prev_resume["extracted_text"].lower())
+        else:
+            similarity = difflib.SequenceMatcher(None, extracted_text.lower(), prev_resume["extracted_text"].lower()).ratio() * 100.0
+            
         if similarity > 60.0:
             is_revision = True
             
