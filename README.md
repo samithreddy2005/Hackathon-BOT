@@ -110,43 +110,60 @@ ATS-Telegram-Bot/
 ├── bot.py
 ├── config.py
 ├── requirements.txt
-├── README.md
+├── .env
 ├── .gitignore
+├── README.md
 ├── LICENSE
 │
-├── ats/
-│   ├── scorer.py
-│   ├── formatter.py
-│   ├── suggestions.py
-│   └── formatting_checker.py
-│
-├── parser/
-│   ├── pdf_parser.py
-│   ├── docx_parser.py
-│   ├── image_parser.py
-│   └── resume_cleaner.py
-│
 ├── handlers/
+│   ├── __init__.py
 │   ├── start.py
+│   ├── help.py
 │   ├── upload.py
 │   ├── score.py
 │   ├── compare.py
-│   └── help.py
+│   ├── history.py
+│   └── conversation.py
+│
+├── parser/
+│   ├── __init__.py
+│   ├── pdf_parser.py
+│   ├── docx_parser.py
+│   ├── image_parser.py
+│   ├── cleaner.py
+│   └── extractor.py
+│
+├── ats/
+│   ├── __init__.py
+│   ├── scorer.py
+│   ├── keyword_matcher.py
+│   ├── formatting_checker.py
+│   ├── section_checker.py
+│   └── suggestions.py
 │
 ├── comparison/
+│   ├── __init__.py
 │   └── version_tracker.py
 │
 ├── database/
+│   ├── __init__.py
 │   ├── db.py
 │   └── schema.sql
 │
+├── models/
+│
 ├── utils/
+│   ├── logger.py
+│   ├── validators.py
+│   ├── constants.py
+│   └── helpers.py
 │
+├── uploads/
+├── logs/
 ├── tests/
-│
-├── sample_data/
-│
-└── docs/
+├── docs/
+├── assets/
+└── sample_data/
 ```
 
 ---

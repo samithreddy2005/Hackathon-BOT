@@ -1,0 +1,3 @@
+"""
+Handler for scoring resume.
+"""

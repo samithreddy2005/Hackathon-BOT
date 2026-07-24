@@ -1,0 +1,3 @@
+"""
+Parser for DOCX files.
+"""
