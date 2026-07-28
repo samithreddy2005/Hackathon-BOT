@@ -140,6 +140,7 @@ async def handle_resume_upload(update: Update, context: ContextTypes.DEFAULT_TYP
     # Verify Case E: Check if it's a near-duplicate / revision of a previous resume
     from database.db import get_latest_resume
     try:
+        # pyrefly: ignore [missing-import]
         from rapidfuzz import fuzz
         has_rapidfuzz = True
     except ImportError:
@@ -165,6 +166,7 @@ async def handle_resume_upload(update: Update, context: ContextTypes.DEFAULT_TYP
     if resume_id:
         context.user_data["state"] = "WAITING_FOR_JD"
         context.user_data["last_resume_id"] = resume_id
+        context.user_data["session_cleared"] = False
         
         # Append resume_id to tracking list
         if "uploaded_resume_ids" not in context.user_data:

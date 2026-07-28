@@ -24,6 +24,7 @@ from handlers.score import handle_job_description, handle_latest_score_callback
 from handlers.compare import handle_compare
 from handlers.history import handle_history
 from handlers.conversation import handle_faq_query
+from handlers.newchat import handle_newchat
 
 # Configure logging
 logging.basicConfig(
@@ -142,6 +143,7 @@ async def post_init(application: Application) -> None:
     """
     commands = [
         BotCommand("start", "Start the bot and open the main menu"),
+        BotCommand("newchat", "Start a fresh chat conversation"),
         BotCommand("help", "View detailed instructions and help"),
         BotCommand("compare", "Compare the latest two resume uploads"),
         BotCommand("history", "View your scoring history")
@@ -167,6 +169,7 @@ def main() -> None:
     # 3. Register handlers
     # Command handlers
     application.add_handler(CommandHandler("start", handle_start))
+    application.add_handler(CommandHandler("newchat", handle_newchat))
     application.add_handler(CommandHandler("help", handle_help))
     application.add_handler(CommandHandler("compare", handle_compare))
     application.add_handler(CommandHandler("history", handle_history))

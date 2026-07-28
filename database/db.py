@@ -233,3 +233,15 @@ def get_previous_resume(user_id, current_resume_id):
     except Exception as e:
         logger.error(f"Error retrieving previous resume for user {user_id}: {e}")
         return None
+
+def get_jd_by_id(jd_id):
+    """
+    Retrieves a job description record by its unique ID.
+    """
+    try:
+        with get_connection() as conn:
+            row = conn.execute("SELECT * FROM job_descriptions WHERE jd_id = ?", (jd_id,)).fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Error retrieving JD by ID {jd_id}: {e}")
+        return None

@@ -206,21 +206,27 @@ class TFIDFSearch:
 # Initialize the Search Engine
 search_engine = TFIDFSearch(FAQ_DATA)
 
-def get_faq_response(user_query, user_id=None):
+def get_faq_response(user_query, user_id=None, session_cleared=False, active_resume_id=None, active_jd_id=None):
     """
     Retrieves the response to the user query.
-    If GROK_API_KEY is configured, uses native Groq API with user's resume/JD context.
+    If GROK_API_KEY is configured, uses native Groq API with user's active resume/JD context.
     Otherwise, falls back to local TF-IDF matching (Case F/G).
     """
     if groq_client:
         try:
             # Dynamically fetch user's active resume and Job Description for context
             context_info = ""
-            if user_id:
+            if user_id and not session_cleared:
                 try:
-                    from database.db import get_latest_resume, get_latest_jd
-                    resume = get_latest_resume(user_id)
-                    jd = get_latest_jd(user_id)
+                    from database.db import get_resume_by_id, get_jd_by_id
+                    
+                    resume = None
+                    if active_resume_id:
+                        resume = get_resume_by_id(active_resume_id)
+                        
+                    jd = None
+                    if active_jd_id:
+                        jd = get_jd_by_id(active_jd_id)
                     
                     if resume:
                         context_info += f"\n\n--- CURRENT CANDIDATE RESUME TEXT ---\n{resume['extracted_text']}\n"
@@ -288,7 +294,19 @@ async def handle_faq_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     user_message = update.message.text
     user_id = update.effective_user.id
-    response = get_faq_response(user_message, user_id=user_id)
+    
+    # Retrieve active session IDs to pass as context
+    active_resume_id = context.user_data.get("last_resume_id")
+    active_jd_id = context.user_data.get("active_jd_id")
+    session_cleared = context.user_data.get("session_cleared", False)
+    
+    response = get_faq_response(
+        user_message,
+        user_id=user_id,
+        session_cleared=session_cleared,
+        active_resume_id=active_resume_id,
+        active_jd_id=active_jd_id
+    )
     try:
         await update.message.reply_text(response, parse_mode="Markdown")
     except Exception as e:

@@ -179,6 +179,7 @@ async def handle_job_description(update: Update, context: ContextTypes.DEFAULT_T
     # Reset states and uploaded batch list
     context.user_data["state"] = None
     context.user_data["uploaded_resume_ids"] = []
+    context.user_data["active_jd_id"] = jd_id
 
 async def handle_latest_score_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
