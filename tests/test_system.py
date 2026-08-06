@@ -14,7 +14,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Set separate database path for test runs
 import config
-config.DATABASE_PATH = r"database/test_unittest_bot.db"
+import tempfile
+
+# Use a temp database file per test run to avoid Windows file-lock issues
+db_tmp = tempfile.NamedTemporaryFile(prefix="test_unittest_bot_", dir="database", delete=False)
+db_tmp.close()
+config.DATABASE_PATH = db_tmp.name
 
 from database import db
 from parser import cleaner, extractor
@@ -24,15 +29,24 @@ from handlers import conversation
 
 class TestDatabase(unittest.TestCase):
     def setUp(self):
-        # Remove any pre-existing test DB
+        # Remove any pre-existing test DB (ignore permission errors on Windows)
         if os.path.exists(config.DATABASE_PATH):
-            os.remove(config.DATABASE_PATH)
+            try:
+                os.remove(config.DATABASE_PATH)
+            except PermissionError:
+                # File may be locked by SQLite; ignore and continue using temp DB
+                pass
         db.init_db()
         
     def tearDown(self):
         # Clean up database file after run
         if os.path.exists(config.DATABASE_PATH):
-            os.remove(config.DATABASE_PATH)
+            try:
+                os.remove(config.DATABASE_PATH)
+            except PermissionError:
+                # If the file is locked, ignore — test environment on Windows
+                # sometimes keeps handles open; CI will use ephemeral runners.
+                pass
             
     def test_user_operations(self):
         # Add user

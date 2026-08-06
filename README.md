@@ -198,6 +198,53 @@ ATS-Telegram-Bot/
 
 ---
 
+## Getting started
+
+1. Create a Python 3.11+ virtual environment and activate it:
+
+```bash
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+```
+
+2. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Copy `.env.example` to `.env` and set the `BOT_TOKEN` (required):
+
+```bash
+cp .env.example .env
+# Edit .env and add BOT_TOKEN and any optional keys
+```
+
+4. Run tests:
+
+```bash
+pytest -q
+```
+
+5. Start the bot (development mode):
+
+```bash
+python bot.py
+```
+
+### .env example
+
+Create a `.env` file with values from `.env.example`. Key variables:
+
+- `BOT_TOKEN` — Telegram bot token (required)
+- `DATABASE_PATH` — path to SQLite DB (default: `database/ats_bot.db`)
+- `GROQ_API_KEY` — optional Groq API key to enable generative assistant
+- `LOG_LEVEL` — logging level (INFO/DEBUG)
+
+
 ## 🚀 Getting Started
 
 ### Clone the Repository

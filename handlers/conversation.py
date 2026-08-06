@@ -11,17 +11,18 @@ from telegram.ext import ContextTypes
 from parser.cleaner import tokenize_and_normalize
 # pyrefly: ignore [missing-import]
 from groq import Groq
+from config import GROQ_API_KEY
 
 # Initialize logger first so it's available for client configuration logs
 logger = logging.getLogger(__name__)
 
-# Configure Groq client if key is present
-groq_key = os.getenv("REDACTED_GROQ_KEY", "")
+# Configure Groq client if key is present (use config.GROQ_API_KEY)
+groq_key = GROQ_API_KEY or os.getenv("GSK_API_KEY", "")
 
-# Fallback: if not found, look for any environment variable containing 'gsk_'
+# Legacy fallback: look for any env value that appears to be a Groq key
 if not groq_key:
     for env_name, env_val in os.environ.items():
-        if env_val.startswith("gsk_"):
+        if env_name.upper().startswith("GSK_") or (isinstance(env_val, str) and env_val.startswith("gsk_")):
             groq_key = env_val
             break
 
