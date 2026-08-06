@@ -72,3 +72,4 @@ logs/*.log
 uploads/*
 !uploads/.gitkeep
 !logs/.gitkeep
+.env
