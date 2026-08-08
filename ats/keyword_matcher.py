@@ -75,38 +75,55 @@ def match_keywords(resume_text, jd_text):
     # Fallback to statistical word extraction if JD has no standard tech/soft skills
     if not jd_skills:
         jd_skills = extract_potential_keywords(jd_text)
-        
+
     if not jd_skills:
         return 100.0, [], []
-        
+
     resume_text_lower = resume_text.lower()
     resume_tokens = tokenize_and_normalize(resume_text)
-    
+
     matched = []
     missing = []
-    
+
     for skill in jd_skills:
-        # Check if the extracted skill is present in the resume
+        # Direct match for dictionary skills or extracted phrases.
         if is_skill_present(resume_text_lower, skill):
             matched.append(skill)
             continue
-            
-        # Fuzzy fallback match (spelling differences) for single-word skills
+
+        # Fuzzy fallback using normalized resume tokens for single-word tokens.
         is_fuzzy_match = False
         if " " not in skill and len(skill) > 3:
             for token in resume_tokens:
                 if len(token) > 3:
-                    if fuzz.ratio(token, skill) > 85.0:
+                    if fuzz.ratio(token, skill) > 80.0:
                         matched.append(skill)
                         is_fuzzy_match = True
                         break
-                        
+
+        # Fuzzy phrase matching for multi-word extracted phrases.
+        if not is_fuzzy_match and " " in skill:
+            phrase_tokens = skill.split()
+            if all(tok in resume_tokens for tok in phrase_tokens):
+                matched.append(skill)
+                is_fuzzy_match = True
+
+        if not is_fuzzy_match:
+            # Attempt partial token overlap for longer keywords/phrases.
+            overlap_hits = 0
+            skill_parts = skill.split()
+            for part in skill_parts:
+                if part in resume_tokens:
+                    overlap_hits += 1
+            if overlap_hits >= max(1, len(skill_parts) - 1):
+                matched.append(skill)
+                is_fuzzy_match = True
+
         if not is_fuzzy_match:
             missing.append(skill)
-            
-    # Calculate match percentage
+
     total_skills = len(jd_skills)
     match_count = len(matched)
     match_percentage = (match_count / total_skills) * 100.0 if total_skills > 0 else 100.0
-    
+
     return round(match_percentage, 1), matched, missing

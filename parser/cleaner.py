@@ -53,25 +53,43 @@ def tokenize_and_normalize(text):
     
     return set(normalized_tokens)
 
-def extract_potential_keywords(text):
+def extract_potential_keywords(text, max_keywords=20):
     """
     Extracts terms that are likely keywords/skills from the Job Description text.
-    Looks for capitalized terms, common tech symbols, and words.
+    Looks for strong tokens and common multi-word phrases.
     """
     if not text:
         return []
-    
-    # Extract unique tokens, keeping order
-    words = re.findall(r'[a-zA-Z0-9+#\-]+', text)
+
+    # Normalize the text and split into tokens
+    words = re.findall(r'[A-Za-z0-9+#\-]+', text)
+    normalized = [word.lower() for word in words]
+
+    # Build candidate phrases from bigrams/trigrams first, then single tokens.
     seen = set()
     keywords = []
-    
-    for word in words:
-        word_lower = word.lower()
-        if word_lower not in STOP_WORDS and len(word_lower) > 1:
-            if word_lower not in seen:
-                seen.add(word_lower)
-                # Keep original case for presentation if useful, but store lower
-                keywords.append(word_lower)
-                
+
+    def is_valid_token(token: str) -> bool:
+        return token not in STOP_WORDS and len(token) > 2 and not token.isdigit()
+
+    # Add multi-word candidates first, which are often more meaningful than isolated words.
+    for n in (3, 2):
+        for i in range(len(normalized) - n + 1):
+            phrase_tokens = normalized[i:i + n]
+            if all(is_valid_token(tok) for tok in phrase_tokens):
+                phrase = " ".join(phrase_tokens)
+                if phrase not in seen:
+                    seen.add(phrase)
+                    keywords.append(phrase)
+                    if len(keywords) >= max_keywords:
+                        return keywords
+
+    # Add single-word keywords after phrase candidates.
+    for token in normalized:
+        if is_valid_token(token) and token not in seen:
+            seen.add(token)
+            keywords.append(token)
+            if len(keywords) >= max_keywords:
+                break
+
     return keywords
