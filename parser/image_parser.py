@@ -5,7 +5,7 @@ import os
 import pytesseract
 from PIL import Image
 import logging
-import pandas
+
 
 logger = logging.getLogger(__name__)
 
