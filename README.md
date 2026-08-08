@@ -219,14 +219,16 @@ pip install -r requirements.txt
 3. Copy `.env.example` to `.env` and set the `BOT_TOKEN` (required):
 
 ```bash
+# Unix/macOS
 cp .env.example .env
-# Edit .env and add BOT_TOKEN and any optional keys
+# Windows PowerShell
+Copy-Item .env.example .env
 ```
 
 4. Run tests:
 
 ```bash
-pytest -q
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
 5. Start the bot (development mode):
