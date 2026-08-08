@@ -149,6 +149,42 @@ async def post_init(application: Application) -> None:
         BotCommand("history", "View your scoring history")
     ]
     await application.bot.set_my_commands(commands)
+    
+def create_application() -> Application:
+    """
+    Build and return a configured `Application` instance without starting it.
+    This is used by both polling and webhook entrypoints.
+    """
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+
+    # Command handlers
+    application.add_handler(CommandHandler("start", handle_start))
+    application.add_handler(CommandHandler("newchat", handle_newchat))
+    application.add_handler(CommandHandler("help", handle_help))
+    application.add_handler(CommandHandler("compare", handle_compare))
+    application.add_handler(CommandHandler("history", handle_history))
+
+    # Callback query handler (for buttons)
+    application.add_handler(CallbackQueryHandler(handle_callback_query))
+
+    # Document/Photo handlers (for resume uploads)
+    application.add_handler(
+        MessageHandler(
+            filters.Document.ALL | filters.PHOTO,
+            handle_resume_upload
+        )
+    )
+
+    # General text messages (Job Description or FAQ)
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_text_message
+        )
+    )
+
+    return application
+
 
 def main() -> None:
     """
@@ -164,37 +200,10 @@ def main() -> None:
         sys.exit(1)
         
     # 2. Build the application
-    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
-
-    # 3. Register handlers
-    # Command handlers
-    application.add_handler(CommandHandler("start", handle_start))
-    application.add_handler(CommandHandler("newchat", handle_newchat))
-    application.add_handler(CommandHandler("help", handle_help))
-    application.add_handler(CommandHandler("compare", handle_compare))
-    application.add_handler(CommandHandler("history", handle_history))
-    
-    # Callback query handler (for buttons)
-    application.add_handler(CallbackQueryHandler(handle_callback_query))
-    
-    # Document/Photo handlers (for resume uploads)
-    application.add_handler(
-        MessageHandler(
-            filters.Document.ALL | filters.PHOTO,
-            handle_resume_upload
-        )
-    )
-    
-    # General text messages (Job Description or FAQ)
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handle_text_message
-        )
-    )
+    application = create_application()
 
     # 4. Start the Bot using polling
-    logger.info("Bot started. Listening for updates...")
+    logger.info("Bot started. Listening for updates (polling)...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
