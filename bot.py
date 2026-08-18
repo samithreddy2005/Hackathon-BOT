@@ -14,6 +14,7 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+from telegram.error import InvalidToken
 
 from config import BOT_TOKEN
 from database.db import init_db
@@ -198,13 +199,21 @@ def main() -> None:
     if not BOT_TOKEN:
         logger.critical("BOT_TOKEN is missing in the environment. Set BOT_TOKEN in .env file.")
         sys.exit(1)
+    # Catch common placeholder tokens and give a clear message
+    if any(p in BOT_TOKEN.lower() for p in ("your-telegram", "example", "replace", "bot-token")):
+        logger.critical("BOT_TOKEN appears to be a placeholder. Please set a valid Telegram bot token in the environment or .env file.")
+        sys.exit(1)
         
     # 2. Build the application
     application = create_application()
 
     # 4. Start the Bot using polling
     logger.info("Bot started. Listening for updates (polling)...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    try:
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except InvalidToken:
+        logger.critical("Invalid BOT_TOKEN provided: the Telegram API rejected the token. Replace BOT_TOKEN with a valid token and try again.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
