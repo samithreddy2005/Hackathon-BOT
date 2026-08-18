@@ -14,6 +14,7 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+from telegram.error import InvalidToken
 
 from config import BOT_TOKEN
 from database.db import init_db
@@ -149,6 +150,42 @@ async def post_init(application: Application) -> None:
         BotCommand("history", "View your scoring history")
     ]
     await application.bot.set_my_commands(commands)
+    
+def create_application() -> Application:
+    """
+    Build and return a configured `Application` instance without starting it.
+    This is used by both polling and webhook entrypoints.
+    """
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+
+    # Command handlers
+    application.add_handler(CommandHandler("start", handle_start))
+    application.add_handler(CommandHandler("newchat", handle_newchat))
+    application.add_handler(CommandHandler("help", handle_help))
+    application.add_handler(CommandHandler("compare", handle_compare))
+    application.add_handler(CommandHandler("history", handle_history))
+
+    # Callback query handler (for buttons)
+    application.add_handler(CallbackQueryHandler(handle_callback_query))
+
+    # Document/Photo handlers (for resume uploads)
+    application.add_handler(
+        MessageHandler(
+            filters.Document.ALL | filters.PHOTO,
+            handle_resume_upload
+        )
+    )
+
+    # General text messages (Job Description or FAQ)
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_text_message
+        )
+    )
+
+    return application
+
 
 def main() -> None:
     """
@@ -162,40 +199,21 @@ def main() -> None:
     if not BOT_TOKEN:
         logger.critical("BOT_TOKEN is missing in the environment. Set BOT_TOKEN in .env file.")
         sys.exit(1)
+    # Catch common placeholder tokens and give a clear message
+    if any(p in BOT_TOKEN.lower() for p in ("your-telegram", "example", "replace", "bot-token")):
+        logger.critical("BOT_TOKEN appears to be a placeholder. Please set a valid Telegram bot token in the environment or .env file.")
+        sys.exit(1)
         
     # 2. Build the application
-    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
-
-    # 3. Register handlers
-    # Command handlers
-    application.add_handler(CommandHandler("start", handle_start))
-    application.add_handler(CommandHandler("newchat", handle_newchat))
-    application.add_handler(CommandHandler("help", handle_help))
-    application.add_handler(CommandHandler("compare", handle_compare))
-    application.add_handler(CommandHandler("history", handle_history))
-    
-    # Callback query handler (for buttons)
-    application.add_handler(CallbackQueryHandler(handle_callback_query))
-    
-    # Document/Photo handlers (for resume uploads)
-    application.add_handler(
-        MessageHandler(
-            filters.Document.ALL | filters.PHOTO,
-            handle_resume_upload
-        )
-    )
-    
-    # General text messages (Job Description or FAQ)
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handle_text_message
-        )
-    )
+    application = create_application()
 
     # 4. Start the Bot using polling
-    logger.info("Bot started. Listening for updates...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Bot started. Listening for updates (polling)...")
+    try:
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except InvalidToken:
+        logger.critical("Invalid BOT_TOKEN provided: the Telegram API rejected the token. Replace BOT_TOKEN with a valid token and try again.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

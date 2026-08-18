@@ -3,6 +3,7 @@
 An intelligent **Telegram-based ATS (Applicant Tracking System) Resume Analyzer** that evaluates resumes against job descriptions, calculates ATS compatibility scores, provides actionable improvement suggestions, tracks resume iterations, and answers resume-related HR questions—all without relying on external APIs.
 
 ---
+hi
 
 ## 📌 Overview
 
@@ -276,6 +277,33 @@ BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 ```bash
 python bot.py
 ```
+
+---
+
+## 🔁 Deploying to Vercel (serverless webhook)
+
+This project can run on Vercel using Telegram webhooks. High-level steps:
+
+1. Provision an external Postgres database (Supabase/Neon) and set `DATABASE_URL` in Vercel.
+2. In Vercel Project Settings -> Environment Variables add:
+      - `BOT_TOKEN` — your Telegram bot token
+      - `DATABASE_URL` — Postgres connection string (optional; otherwise SQLite used locally)
+      - `USE_WEBHOOK=true`
+      - `TELEGRAM_WEBHOOK_URL` — the public webhook URL (e.g. `https://your-project.vercel.app/api/webhook`)
+3. Connect your GitHub repo to Vercel and enable automatic deploys.
+4. The serverless handler is at `api/webhook.py` — Vercel will expose it at `/api/webhook`.
+5. After deployment, set the Telegram webhook to the Vercel endpoint (replace `<URL>`):
+
+```bash
+curl -F "url=<URL>/api/webhook" "https://api.telegram.org/bot$BOT_TOKEN/setWebhook"
+```
+
+6. Run the DB migrations (schema.sql) on your external Postgres (e.g., use Supabase SQL editor or `psql`).
+
+Notes:
+- Vercel functions have ephemeral filesystem; do not rely on SQLite for persistence in production.
+- Keep all secrets in Vercel Environment Variables — never commit them to the repo.
+
 
 ---
 
