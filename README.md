@@ -3,7 +3,7 @@
 An intelligent **Telegram-based ATS (Applicant Tracking System) Resume Analyzer** that evaluates resumes against job descriptions, calculates ATS compatibility scores, provides actionable improvement suggestions, tracks resume iterations, and answers resume-related HR questions—all without relying on external APIs.
 
 ---
-hi
+
 
 ## 📌 Overview
 
