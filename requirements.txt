@@ -1,12 +1,19 @@
-python-telegram-bot>=20.0
-pdfplumber>=0.10.0
-python-docx>=1.1.0
-pytesseract>=0.3.10
-Pillow>=10.0.0
-python-dotenv>=1.0.0
-rapidfuzz>=3.0.0
-google-generativeai>=0.3.0
-groq>=0.4.0
+# Runtime dependencies.
+#
+# The authoritative list lives in pyproject.toml; this file mirrors it with upper
+# bounds so `pip install -r requirements.txt` reproduces a working environment
+# without installing the package. For development, prefer:
+#
+#     pip install -e ".[dev,llm]"
 
+python-telegram-bot[job-queue]>=21.0,<23.0
+python-dotenv>=1.0,<2.0
+pdfplumber>=0.11,<0.12
+python-docx>=1.1,<2.0
+pytesseract>=0.3.10,<0.4
+Pillow>=10.0,<13.0
+rapidfuzz>=3.0,<4.0
 
-
+# Optional: enables the LLM-backed assistant. Safe to omit — the bot falls back
+# to its offline knowledge base.
+groq>=0.11,<2.0

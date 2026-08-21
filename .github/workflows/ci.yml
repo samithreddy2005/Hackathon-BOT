@@ -2,30 +2,111 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: ["**"]
   pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
-  test:
+  lint:
+    name: Lint and type check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest flake8
+      - name: Install
+        run: pip install -e ".[dev,llm]"
+
+      - name: Ruff
+        run: ruff check src tests bot.py
+
+      - name: Black
+        run: black --check src tests bot.py
+
+      - name: Mypy
+        run: mypy
+
+  test:
+    name: Test (Python ${{ matrix.python-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+        # One OS per version is enough for the middle versions; the matrix below
+        # keeps full coverage on the oldest and newest supported interpreters.
+        exclude:
+          - os: windows-latest
+            python-version: "3.12"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev,llm]"
 
       - name: Run tests
-        run: pytest -q
+        run: >-
+          pytest tests --doctest-modules src/ats_bot
+          --cov=src/ats_bot --cov-report=term-missing --cov-report=xml
+          --cov-fail-under=80
 
-      - name: Run linter
-        run: flake8 . --max-line-length=120 || true
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: error
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ats-resume-bot:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify the entry point reports a clear configuration error
+        run: |
+          set +e
+          output=$(docker run --rm ats-resume-bot:ci 2>&1)
+          status=$?
+          echo "$output"
+          # Exit code 2 is "configuration error"; with no BOT_TOKEN that is the
+          # correct, non-crashing behaviour.
+          if [ "$status" -ne 2 ]; then
+            echo "Expected exit code 2, got $status"
+            exit 1
+          fi
+          echo "$output" | grep -q "BOT_TOKEN" || {
+            echo "Expected the error to name BOT_TOKEN"
+            exit 1
+          }

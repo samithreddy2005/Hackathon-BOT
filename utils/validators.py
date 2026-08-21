@@ -1,3 +1,0 @@
-"""
-Input and file validators.
-"""

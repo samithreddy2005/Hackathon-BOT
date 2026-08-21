@@ -1,0 +1,44 @@
+# Keep secrets and user data out of the image. Without this file, `COPY . /app`
+# bakes .env — including the bot token — into a layer that anyone who pulls the
+# image can read.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# User data
+uploads/
+logs/
+database/
+*.db
+*.sqlite*
+
+# Local environments and caches — large, and wrong for the target platform
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Version control and CI
+.git/
+.github/
+.gitignore
+.pre-commit-config.yaml
+
+# Development-only files
+tests/
+docs/
+CONTRIBUTING.md
+CHANGELOG.md
+requirements-dev.txt

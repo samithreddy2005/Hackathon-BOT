@@ -1,0 +1,20 @@
+# Normalise line endings so the repository is consistent across Windows, macOS,
+# and the Linux CI runners. Without this, files committed from Windows carry CRLF
+# and shell scripts / Docker builds break on Linux.
+* text=auto eol=lf
+
+# Files that must keep LF regardless of platform.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binary files git must never try to convert.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.pdf  binary
+*.docx binary
+*.db   binary
+*.ico  binary

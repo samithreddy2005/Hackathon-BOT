@@ -1,376 +1,250 @@
-# 🤖 ATS Resume Analyzer Telegram Bot
+# ATS Resume Analyzer
 
-An intelligent **Telegram-based ATS (Applicant Tracking System) Resume Analyzer** that evaluates resumes against job descriptions, calculates ATS compatibility scores, provides actionable improvement suggestions, tracks resume iterations, and answers resume-related HR questions—all without relying on external APIs.
+A Telegram bot that scores a resume against a specific job description the way an
+applicant tracking system would, and tells the candidate exactly what to change.
 
----
-hi
+Scoring runs entirely locally — no resume text leaves the machine unless the
+optional LLM assistant is switched on.
 
-## 📌 Overview
-
-Recruiters often use Applicant Tracking Systems (ATS) to filter resumes before they reach a hiring manager. This project simulates the core functionality of an ATS by allowing users to upload a resume, compare it against a Job Description (JD), receive a compatibility score, identify missing skills, and improve their resume through iterative feedback.
-
-The bot is designed to run entirely within Telegram while performing all processing locally using Python.
-
----
-
-## ✨ Features
-
-### 📄 Resume Upload
-
-* Upload resumes in **PDF**, **DOCX**, or **Image** format.
-* Automatically extract and clean resume text.
-
-### 📝 Job Description Analysis
-
-* Accept Job Descriptions as plain text.
-* Extract required skills and important keywords.
-
-### 🎯 ATS Compatibility Scoring
-
-* Generate an ATS score (0–100).
-* Evaluate:
-
-  * Keyword Match
-  * Resume Structure
-  * Section Completeness
-  * Formatting Quality
-  * Overall Relevance
-
-### 📊 Detailed Score Breakdown
-
-* Matched Keywords
-* Missing Keywords
-* Formatting Issues
-* Section Analysis
-* Improvement Opportunities
-
-### 💡 Resume Improvement Suggestions
-
-* Recommend missing skills.
-* Suggest stronger resume sections.
-* Highlight ATS-friendly improvements.
-
-### 🔄 Resume Version Tracking
-
-* Detect updated resume uploads.
-* Compare previous and current versions.
-* Show:
-
-  * Added Skills
-  * Removed Skills
-  * Updated Sections
-  * ATS Score Improvement
-
-### 💬 Resume & HR Assistant
-
-Answer questions related to:
-
-* Resume Writing
-* ATS Optimization
-* Interview Preparation
-* Resume Formatting
-* General Recruitment & HR Queries
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Tests](https://img.shields.io/badge/tests-357-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)
 
 ---
 
-## 🏗️ System Architecture
+## What it does
 
-```text
-Telegram User
-      │
-      ▼
-Telegram Bot
-      │
-      ▼
-Resume Parser
-      │
-      ▼
-Job Description Parser
-      │
-      ▼
-ATS Engine
-   ├── Keyword Matcher
-   ├── Score Calculator
-   ├── Formatting Checker
-   └── Suggestion Generator
-      │
-      ▼
-Resume Version Tracker
-      │
-      ▼
-Telegram Response
+Send a resume, paste a job posting, get a report:
+
 ```
+🟡 ATS Match Report
+──────────────────────
+68.4/100 — Fair
+▰▰▰▰▰▰▰▱▱▱
+
+🔑 Keywords (40%) — 62.5%
+🏛 Sections (30%) — 80.0%
+📐 Formatting (30%) — 65.0%
+──────────────────────
+
+Skills from the posting — 5/8 found
+✅ python, django, postgresql, docker, aws
+❌ kubernetes, terraform, ci/cd
+
+Missing sections: summary, projects
+At a glance: 412 words · email ✅ · phone ✅ · links ❌ · 1 quantified result
+
+──────────────────────
+What to fix, highest impact first
+
+1. Work these job-description skills into your resume where you genuinely
+   have them: kubernetes, terraform, ci/cd.
+2. Open with a 3-4 line 'Professional Summary' naming your title, years of
+   experience, and the two results you are proudest of.
+3. No LinkedIn or portfolio link found. Add one — it is the first thing most
+   recruiters click after the header.
+```
+
+Upload an edited version and send the same posting again, and it diffs the two:
+which keywords you gained, which sections you added, which issues you fixed, and
+how the score moved.
+
+### Features
+
+| | |
+|---|---|
+| **Multi-format intake** | PDF, DOCX, and images (OCR). Tables, headers, and footers are read, not silently dropped. |
+| **Keyword matching** | A curated skills vocabulary with alias folding, so `React.js`, `ReactJS`, and `react` count once. Falls back to statistical keyword mining for non-technical roles. |
+| **Section analysis** | Heading-aware detection that does not mistake "I have experience" for an Experience section. |
+| **Formatting checks** | Length, contact details, profile links, quantified achievements, placeholder text, first-person prose. |
+| **Version comparison** | Both resumes re-scored against the *same* posting, so the delta means something. |
+| **Score history** | Every evaluation kept, with the trend across the window. |
+| **Q&A assistant** | Offline TF-IDF knowledge base covering resumes, interviews, salary, and career gaps. Optionally upgraded to a Groq-hosted model that can read your own documents. |
+| **Data control** | `/newchat` clears the session; `/forgetme` permanently deletes everything. Uploaded files auto-expire. |
 
 ---
 
-## 📁 Project Structure
+## Quick start
 
-```text
-ATS-Telegram-Bot/
-│
-├── bot.py
-├── config.py
-├── requirements.txt
-├── .env
-├── .gitignore
-├── README.md
-├── LICENSE
-│
-├── handlers/
-│   ├── __init__.py
-│   ├── start.py
-│   ├── help.py
-│   ├── upload.py
-│   ├── score.py
-│   ├── compare.py
-│   ├── history.py
-│   └── conversation.py
-│
-├── parser/
-│   ├── __init__.py
-│   ├── pdf_parser.py
-│   ├── docx_parser.py
-│   ├── image_parser.py
-│   ├── cleaner.py
-│   └── extractor.py
-│
-├── ats/
-│   ├── __init__.py
-│   ├── scorer.py
-│   ├── keyword_matcher.py
-│   ├── formatting_checker.py
-│   ├── section_checker.py
-│   └── suggestions.py
-│
-├── comparison/
-│   ├── __init__.py
-│   └── version_tracker.py
-│
-├── database/
-│   ├── __init__.py
-│   ├── db.py
-│   └── schema.sql
-│
-├── models/
-│
-├── utils/
-│   ├── logger.py
-│   ├── validators.py
-│   ├── constants.py
-│   └── helpers.py
-│
-├── uploads/
-├── logs/
-├── tests/
-├── docs/
-├── assets/
-└── sample_data/
-```
-
----
-
-## ⚙️ Tech Stack
-
-### Backend
-
-* Python 3.11+
-* python-telegram-bot
-
-### Document Processing
-
-* pdfplumber
-* python-docx
-* pytesseract
-* Pillow
-
-### Text Processing
-
-* RapidFuzz
-* Regular Expressions
-
-### Database
-
-* SQLite
-
-### Utilities
-
-* Git
-* GitHub
-
----
-
-## Getting started
-
-1. Create a Python 3.11+ virtual environment and activate it:
+Requires **Python 3.11+**.
 
 ```bash
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS / Linux
-source venv/bin/activate
-```
-
-2. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-3. Copy `.env.example` to `.env` and set the `BOT_TOKEN` (required):
-
-```bash
-# Unix/macOS
-cp .env.example .env
-# Windows PowerShell
-Copy-Item .env.example .env
-```
-
-4. Run tests:
-
-```bash
-python -m unittest discover -s tests -p "test_*.py"
-```
-
-5. Start the bot (development mode):
-
-```bash
-python bot.py
-```
-
-### .env example
-
-Create a `.env` file with values from `.env.example`. Key variables:
-
-- `BOT_TOKEN` — Telegram bot token (required)
-- `DATABASE_PATH` — path to SQLite DB (default: `database/ats_bot.db`)
-- `GROQ_API_KEY` — optional Groq API key to enable generative assistant
-- `LOG_LEVEL` — logging level (INFO/DEBUG)
-
-
-## 🚀 Getting Started
-
-### Clone the Repository
-
-```bash
-git clone https://github.com/<your-username>/ATS-Telegram-Bot.git
-
+git clone https://github.com/samithreddy/ATS-Telegram-Bot.git
 cd ATS-Telegram-Bot
+
+python -m venv venv
+source venv/bin/activate       # Windows: venv\Scripts\activate
+
+pip install -e .
+
+cp .env.example .env           # Windows: Copy-Item .env.example .env
+# Put your @BotFather token in BOT_TOKEN
+
+ats-bot
 ```
 
-### Install Dependencies
+`python bot.py` and `python -m ats_bot` both work too.
+
+If the token is missing or malformed, the bot exits immediately with exit code 2
+and a message naming the variable to set — it does not start and then fail on the
+first update.
+
+### Optional: OCR for photographed resumes
+
+Without Tesseract the bot works fully; it just cannot read resumes sent as
+images, and says so.
 
 ```bash
-pip install -r requirements.txt
+sudo apt install tesseract-ocr      # Debian/Ubuntu
+brew install tesseract              # macOS
 ```
 
-### Configure Environment
+On Windows, install from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki).
+It is found automatically in the standard install locations; set `TESSERACT_CMD`
+if you put it elsewhere.
 
-Create a `.env` file:
+### Optional: LLM assistant
 
-```env
-BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
-```
+Set `GROQ_API_KEY` in `.env` to have free-form questions answered by a language
+model that can see the user's uploaded resume and target posting. Leave it empty
+and the offline knowledge base answers instead. Either way the *scoring* engine
+is unchanged and fully local.
 
-### Run the Bot
+---
+
+## Docker
 
 ```bash
-python bot.py
+docker build -t ats-resume-bot .
+docker run -d --name ats-bot \
+  -e BOT_TOKEN="your-token" \
+  -v ats-bot-data:/data \
+  ats-resume-bot
 ```
+
+State (database, uploads, logs) lives under `/data`, so one volume is enough. The
+image runs as a non-root user and ships without a compiler.
 
 ---
 
-## 🔁 Deploying to Vercel (serverless webhook)
+## Commands
 
-This project can run on Vercel using Telegram webhooks. High-level steps:
+| Command | Effect |
+|---|---|
+| `/start` | Main menu |
+| `/help` | How scoring works |
+| `/compare` | Contrast your two most recent resumes |
+| `/history` | Past scores and the trend |
+| `/newchat` | Clear the session (keeps stored data) |
+| `/forgetme` | Permanently delete all of your data |
+| `/about` | Version and which optional features are active |
 
-1. Provision an external Postgres database (Supabase/Neon) and set `DATABASE_URL` in Vercel.
-2. In Vercel Project Settings -> Environment Variables add:
-      - `BOT_TOKEN` — your Telegram bot token
-      - `DATABASE_URL` — Postgres connection string (optional; otherwise SQLite used locally)
-      - `USE_WEBHOOK=true`
-      - `TELEGRAM_WEBHOOK_URL` — the public webhook URL (e.g. `https://your-project.vercel.app/api/webhook`)
-3. Connect your GitHub repo to Vercel and enable automatic deploys.
-4. The serverless handler is at `api/webhook.py` — Vercel will expose it at `/api/webhook`.
-5. After deployment, set the Telegram webhook to the Vercel endpoint (replace `<URL>`):
+Plain text is routed automatically: a pasted posting is scored, a question is
+answered. See `looks_like_job_description` in
+[src/ats_bot/handlers/router.py](src/ats_bot/handlers/router.py) for the exact rule.
+
+---
+
+## How scoring works
+
+The overall score is a weighted mean of three pillars:
+
+| Pillar | Weight | What it measures |
+|---|---|---|
+| **Keywords** | 40% | Share of the posting's required skills present in the resume. Exact match first, then alias match, then phrase coverage, then a conservative fuzzy match for long words only. |
+| **Sections** | 30% | Experience 30, Education 25, Skills 25, Summary 10, Projects 10. Certifications and Languages add a 5-point bonus each, capped at 100. |
+| **Formatting** | 30% | Starts at 100; penalties for no email (−25), no phone (−15), no links (−5), too short (−25) or too long (−12), placeholder text (−20), no quantified results (−10), first-person prose (−5). |
+
+Weights live in [src/ats_bot/constants.py](src/ats_bot/constants.py) and are
+validated at import time. Penalties live in
+[src/ats_bot/ats/formatting.py](src/ats_bot/ats/formatting.py).
+
+A job posting with no extractable requirements scores **0** on keywords, not 100 —
+an empty checklist is not a perfect match.
+
+---
+
+## Architecture
+
+Layers depend only downwards:
+
+```
+handlers/   Telegram controllers — thin, no business logic
+    │
+services/   File intake, FAQ retrieval, LLM client
+    │
+ats/        Scoring engine — pure functions, no I/O
+    │
+parsing/    PDF / DOCX / OCR extraction and normalisation
+    │
+db/         SQLite persistence
+    │
+config      Environment-driven settings
+```
+
+The engine being pure is what makes it testable without a database or a Telegram
+connection, and deterministic enough that a stored score can be reproduced
+exactly. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the details and the
+rationale behind the notable design decisions.
+
+Every blocking call — SQLite, pdfplumber, Tesseract — runs through
+[`run_blocking`](src/ats_bot/utils/concurrency.py) so one slow OCR never stalls
+other users' conversations.
+
+---
+
+## Development
 
 ```bash
-curl -F "url=<URL>/api/webhook" "https://api.telegram.org/bot$BOT_TOKEN/setWebhook"
+pip install -e ".[dev,llm]"
+pre-commit install
+
+pytest tests --doctest-modules src/ats_bot
+ruff check src tests bot.py
+black --check src tests bot.py
+mypy
 ```
 
-6. Run the DB migrations (schema.sql) on your external Postgres (e.g., use Supabase SQL editor or `psql`).
-
-Notes:
-- Vercel functions have ephemeral filesystem; do not rely on SQLite for persistence in production.
-- Keep all secrets in Vercel Environment Variables — never commit them to the repo.
-
+CI runs all of the above on Linux and Windows across Python 3.11–3.13, plus a
+Docker build. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
-## 📈 ATS Evaluation Criteria
+## Configuration
 
-| Category             | Weight |
-| -------------------- | ------ |
-| Keyword Matching     | 40%    |
-| Resume Sections      | 20%    |
-| Formatting           | 15%    |
-| Skills Relevance     | 15%    |
-| Overall Completeness | 10%    |
+Every setting is an environment variable, documented in
+[.env.example](.env.example). Notable ones:
 
----
-
-## 🗺️ Development Roadmap
-
-* [x] Project Planning
-* [x] Repository Setup
-* [x] README Creation
-* [ ] Telegram Bot Initialization
-* [ ] Resume Upload Module
-* [ ] Resume Parsing
-* [ ] Job Description Parser
-* [ ] ATS Scoring Engine
-* [ ] Formatting Checker
-* [ ] Suggestions Engine
-* [ ] Resume Version Comparison
-* [ ] SQLite Integration
-* [ ] Testing
-* [ ] Documentation
-* [ ] Final Release
+| Variable | Default | Purpose |
+|---|---|---|
+| `BOT_TOKEN` | — | **Required.** Token from @BotFather. |
+| `DATABASE_PATH` | `database/ats_bot.db` | SQLite file. Relative paths resolve against the project root. |
+| `UPLOAD_RETENTION_HOURS` | `24` | How long uploaded files are kept. Extracted text stays in the database, so history keeps working. |
+| `MAX_UPLOAD_MB` | `20` | Largest accepted file. |
+| `GROQ_API_KEY` | *(empty)* | Enables the LLM assistant. |
+| `LOG_LEVEL` | `INFO` | `CRITICAL`–`DEBUG`. |
 
 ---
 
-## 📸 Screenshots
+## Privacy
 
-Screenshots and demo GIFs will be added as development progresses.
+Resumes are personal data, and this project treats them that way:
 
----
+- Scoring is local. Nothing is sent anywhere unless `GROQ_API_KEY` is set, and
+  `/about` always reports which mode is active.
+- Uploaded files are deleted after `UPLOAD_RETENTION_HOURS` (24 by default).
+- `/forgetme` deletes a user's resumes, postings, scores, and files immediately.
+- Uploads, logs, and the database are git-ignored. Do not commit them.
 
-## 🤝 Contributing
-
-Contributions, suggestions, and improvements are welcome. Feel free to fork the repository, open issues, or submit pull requests.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
+See [SECURITY.md](SECURITY.md) for reporting a vulnerability.
 
 ---
 
-## ⭐ Future Enhancements
+## License
 
-* Role-specific ATS scoring
-* Advanced semantic skill matching
-* Recruiter dashboard
-* Resume analytics
-* Interview question generation
-* Cover letter assistance
-* Multi-language resume support
+MIT — see [LICENSE](LICENSE).
 
----
-
-## 👨‍💻 Author
+## Author
 
 **K. Samith Reddy**
-
-If you find this project useful, consider giving it a ⭐ on GitHub.

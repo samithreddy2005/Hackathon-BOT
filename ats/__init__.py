@@ -1,3 +1,0 @@
-"""
-ATS Evaluation Engine.
-"""
